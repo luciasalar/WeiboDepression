@@ -1,0 +1,272 @@
+---
+title: "ValencePlots"
+author: "lushi"
+date: "26/01/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(gridExtra)
+library(stringr)
+```
+
+## Valence plot 
+
+* This script generates valence plot in T1, T2, T3
+* here we have time series plot with CESD timeline and time series plot with calendar date time line
+* for time series plot with CESD timeline, we adjusted day valence by deducting valence with calendar date mean valence 
+
+
+
+```{r read file}
+file<- read.csv('~/phd_work/depression dessertation/data/sub_3year.csv')
+cesd<- read.csv('~/phd_work/depression dessertation/data/depression_fix_nohis.csv')
+```
+
+Plot cesd time series, the day before they fill out cesd scale as day 1
+```{r}
+file2 <- file
+
+#average sentiment in each actual day
+senti_actual <- aggregate(sentiment ~ time, file2, sum)
+count_senti_actual <- aggregate(userid ~ time, file2, length)
+#average sentiment 
+aver_senti_actual <- merge(senti_actual, count_senti_actual, by='time')
+aver_senti_actual$aver_senti <- aver_senti_actual$sentiment/aver_senti_actual$userid
+aver_senti_actual <- aver_senti_actual[,c('time','aver_senti')]
+
+#actual mean valence is 0.09717126 per day
+mean(aver_senti_actual$aver_senti)
+
+#normalise user sentiment by actual average day sentiment in the entire sample, sentiment x, sample average
+file3 <- merge(aver_senti_actual, file2, by ='time')
+file3$sentiment_timeS <- file3$sentiment - file3$aver_senti
+
+#valence before normalise
+mean(file3$sentiment)
+#0.09758262
+
+#valence after normalise, close to the mean
+mean(file3$sentiment_timeS)
+#1.625813e-19
+
+#aggregate by date
+count_senti <- aggregate(sentiment_timeS ~ day, file3, sum)
+count_len <- aggregate(userid ~ day, file3, length)
+count  <- merge(count_senti, count_len, by = 'day')
+
+#average sentiment of user in the timeseries
+count$ave_senti_ts <-  count$sentiment_timeS/count$userid
+  
+# ggplot(data=count, aes(x=day)) + 
+#   stat_smooth(aes(y = ave_senti_ts), method = "lm",
+#               formula = y ~ poly(x, 3), se = FALSE) +
+#   ggtitle("Post sentiment in 3 years") +
+#   xlab("Day") + ylab("Post sentiment")
+
+```
+
+Here we set the cesd cut off point
+```{r define cesd cut off point}
+#cesd sum
+cesd$cesd_sum <- rowSums(cesd[,3:13])
+all <- merge(file3,cesd, by = 'userid')
+
+high <- all[all$cesd_sum > 23, ]
+low <- all[all$cesd_sum <= 23, ]
+```
+
+valence plot
+```{r}
+#We plot both group together because both group have 1095 days with sentiment data available
+#Lgroup sentiment
+#aggregate by date  #1095 days
+count_sentiH <- aggregate(sentiment_timeS ~ day, high, sum)
+count_lenH <- aggregate(userid ~ day, high, length)
+countH  <- merge(count_sentiH, count_lenH, by = 'day')
+
+#average sentiment of used in the timeseries, sentiment score divided by number of posts
+countH$ave_senti_ts <-  countH$sentiment_timeS/countH$userid
+
+#Lgroup sentiment
+#aggregate by date #1095 days
+count_sentiL <- aggregate(sentiment_timeS ~ day, low, sum)
+count_lenL <- aggregate(userid ~ day, low, length)
+countL  <- merge(count_sentiL, count_lenL, by = 'day')
+
+#average sentiment  in the timeseries 
+countL$ave_senti_ts <-  countL$sentiment_timeS/countL$userid
+countL2 <- countL[,c('day','ave_senti_ts')]
+colnames(countL2) <- c('day', 'lowS')
+
+#merge high and low group
+myplot1 <- function(plotdata,title) {
+  p <- ggplot(data=plotdata, aes(x=day)) + 
+    stat_smooth(aes(y = ave_senti_ts), method = "lm",
+                formula = y ~ poly(x, 3), se = FALSE, color = 'red') +
+    stat_smooth(aes(y = lowS), method = "lm",
+                formula = y ~ poly(x, 3), se = FALSE) +
+    ggtitle(title) +
+    xlab("Day") + ylab("Post sentiment")
+  return (p)
+}
+
+plotdata <- merge(countL2, countH, by='day')
+p1 <- myplot1(plotdata,"Post sentiment in 3 years")
+
+#select 1 year data
+oneYear <- plotdata[plotdata$day <= 365, ]
+p2 <- myplot1(oneYear, "Post sentiment in 1 year")
+
+#select 1 month data
+oneM <- plotdata[plotdata$day <= 30, ]
+p3<- myplot1(oneM, "Post sentiment in 1 year")
+grid.arrange(p1, p2, p3, nrow = 1)
+```
+
+Valence plot, postive and negative valence
+p1 Negative sentiment in 3 years, P2 Negative sentiment in 1 year, P3 Negative sentiment in 30 days
+p3 Positive sentiment in 3 years, P4 Positive sentiment in 1 year, P5 Positive sentiment in 30 days
+```{r}
+#here we can't plot both group together because the H group has 243 days, L group has 216 days in one year, 
+#these days are likely not over lap, but we can adjust the y axis so that both graphs are on the same scale
+#the valence is normalized with actual valence each day
+
+
+#this function compute negative/positive sentiment in 3 years
+#this function aggregate the sentiment of posts and divide sentiment sum with number of posts
+getSenti <- function(mydata) {
+  NV_h2 <- aggregate(sentiment_timeS ~ day, mydata, sum)
+  count_NV_h <- aggregate(userid ~ day, mydata, length)
+  count_NV_h2  <- merge(NV_h2, count_NV_h, by = 'day')
+  
+  #average sentiment of used in the timeseries, sentiment score divided by number of posts
+  count_NV_h2$cesd_g <-  count_NV_h2$sentiment_timeS/count_NV_h2$userid
+  count_NV_h2 <- count_NV_h2[ ,c('day','cesd_g')]
+  
+  return (count_NV_h2)
+}
+
+#high group 
+NV_h <- high[high$sentiment_timeS < 0, ]
+count_NV_h2 <- getSenti(NV_h)
+#low group
+NV_l <- low[low$sentiment_timeS < 0, ]
+count_NV_l2 <- getSenti(NV_l)
+
+#plot negative valence cesd_g.x: high  cesd_g.y: low
+myplot <- function(mydata,title) {
+  p <- ggplot(data=mydata, aes(x=day)) + 
+    stat_smooth(aes(y = cesd_g.x), method = "lm",
+                formula = y ~ poly(x, 3), se = FALSE, color = 'red') +
+    stat_smooth(aes(y = cesd_g.y), method = "lm",
+                formula = y ~ poly(x, 3), se = FALSE, color = 'blue') +
+
+    # geom_point(aes(y = cesd_g.x, colour="low", size=2))+
+    # geom_point(aes(y = cesd_g.y, colour="high", size=2))+
+    ggtitle(title) +
+    xlab("Day") + ylab("Post sentiment")
+  return (p)
+}
+
+
+#merge high and low group
+NV <- merge(count_NV_h2, count_NV_l2, by = 'day')
+p1 <- myplot(NV, "Negative sentiment in 3 years")
+
+oneY_NV <- NV[NV$day <= 365, ]
+p2 <- myplot(oneY_NV, "Negative sentiment in 1 year")
+
+oneM_NV <- NV[NV$day <= 30, ]
+p3 <- myplot(oneM_NV, "Negative sentiment in 30 days")
+
+
+
+#plot positive valence
+#high group 
+PV_h <- high[high$sentiment_timeS >= 0, ]
+count_PV_h2 <- getSenti(PV_h)
+#low group
+PV_l <- low[low$sentiment_timeS >=  0, ]
+count_PV_l2 <- getSenti(PV_l)
+
+
+PV <- merge(count_PV_h2, count_PV_l2, by = 'day')
+p4 <- myplot(PV, "Positive sentiment in 3 years")
+
+oneY_PV <- PV[PV$day <= 365, ]
+p5 <- myplot(oneY_PV, "Positive sentiment in 1 year")
+
+oneM_PV <- PV[PV$day <= 30, ]
+p6 <- myplot(oneM_PV, "Positive sentiment in 30 days")
+grid.arrange(p1, p2, p3, p4, p5, p6 , nrow = 2)
+
+
+
+
+```
+
+## valence plot with calendar date timeline
+P1 Sentiment in 3 years, P2 Negetive sentiment in 3 years, P3 Positive sentiment in 3 years
+
+```{r pressure, echo=FALSE}
+####plot sentiment in actual date
+
+aver_senti_actual$time2 <- as.Date(aver_senti_actual$time)
+
+h1 <- high[,c('time','sentiment')]
+l1 <- low[,c('time','sentiment')]
+
+getData2 <- function(h1,l1) {
+  h <- aggregate(sentiment ~ time, data = h1, sum)
+  count <- aggregate(sentiment ~ time, data = h1, length)
+  h$sentiment1 <- h$sentiment/count$sentiment
+  
+  l <- aggregate(sentiment ~ time, data = l1, sum)
+  count <- aggregate(sentiment ~ time, data = l1, length)
+  l$sentiment1 <- l$sentiment/count$sentiment
+  
+  h <- h[, c('time', 'sentiment1')]
+  colnames(h) <- c('time','high')
+  l <- l[, c('time', 'sentiment1')]
+  
+  m <- merge(h,l, by = 'time')
+  m$time <- as.Date(m$time)
+  return (m)
+}
+
+
+myPlot5 <- function(mydata,title) {
+
+  p<- ggplot(data=mydata, aes(x=time))+ 
+    stat_smooth(aes(y = high), method = "lm",
+                formula = y ~ poly(x, 3), se = FALSE, color = 'red') +
+    stat_smooth(aes(y = sentiment1), method = "lm",
+                formula = y ~ poly(x, 3), se = FALSE) +
+    ggtitle(title) +
+    xlab("Day") + ylab("Post sentiment")
+  
+  return (p)
+}
+
+Nh <- h1[h1$sentiment < 0, ]
+Nl <- l1[l1$sentiment < 0, ]
+mN <- getData2(Nh,Nl)
+Ph <- h1[h1$sentiment >= 0, ]
+Pl <- l1[l1$sentiment >= 0, ]
+mP <- getData2(Ph,Pl)
+m <- getData2(h1,l1)
+
+
+p1 <- myPlot5(m, "Sentiment in 3 years")
+p2 <- myPlot5(mN, "Negetive sentiment in 3 years")
+p3 <- myPlot5(mP, "Positive sentiment in 3 years")
+
+
+grid.arrange(p1, p2, p3, nrow = 1)
+
+
+```
+
+
