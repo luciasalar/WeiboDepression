@@ -66,12 +66,12 @@ all <- merge(allTime4,cesd, by = 'userid')
 getData <- function(mydata, cutoff) {
   high <- all[all$cesd_sum > cutoff, ]
   count_h <- data.frame(table(high$time))
-  count_h$Freq <- (count_h$Freq/length(unique(high$userid)))/1095
+  count_h$Freq <- (count_h$Freq/length(unique(high$userid)))
   low <- all[all$cesd_sum < cutoff, ]
   
   #we can change the low group and plot it again 
   count_l <- data.frame(table(low$time))
-  count_l$Freq <- (count_l$Freq/length(unique(low$userid)))/1095
+  count_l$Freq <- (count_l$Freq/length(unique(low$userid)))
   
   #merge plots
   h_l <- merge(count_l, count_h, by = 'Var1')
@@ -80,7 +80,7 @@ getData <- function(mydata, cutoff) {
 
 }
 
-myplot <- function(mydata, title){
+myplot <- function(mydata){
   p <- ggplot(data=h_l, aes(x=Var1)) + 
   #  geom_line(colour="red", linetype="dashed", size=1.5) + 
 
@@ -88,12 +88,36 @@ myplot <- function(mydata, title){
     geom_line(aes(y = Freq.x, colour="low"),size=1)+
     geom_line(aes(y = Freq.y, colour="high"), size=1)+
     geom_point(aes(y = Freq.y, colour="high"), size=3)+
-    xlab("time") + ylab("Post volume/day")
+    xlab("Time") + ylab("Post volume/day")+
+    theme(text = element_text(size=15), axis.text.x = element_text(size= 15, angle=90, hjust=1),
+          axis.text.y = element_text(size= 15, angle=90, hjust=1))
+    
+  
   return (p)
 }
 
 h_l <- getData(all, 22)
 myplot(h_l)
+
+##t test for two groups in day time and night time
+dayTime <- h_l[h_l$Var1 <= 18 & h_l$Var1 >= 8, ] 
+t.test(dayTime$Freq.x,dayTime$Freq.y)
+mean(dayTime$Freq.x)
+mean(dayTime$Freq.y)
+
+sd(dayTime$Freq.x)
+sd(dayTime$Freq.y)
+
+nightTime <- h_l[h_l$Var1 > 18 | h_l$Var1 < 8, ] 
+t.test(nightTime$Freq.x,nightTime$Freq.y)
+
+#peak time compare with 8PM
+peakTime <- h_l[h_l$Var1 >= 20 & h_l$Var1 <= 24, ] 
+mean(peakTime$Freq.x)
+mean(peakTime$Freq.y)
+#mean - 8PM amount
+(mean(peakTime$Freq.x) - 2.87)/2.87 #1.28
+(mean(peakTime$Freq.y) - 2.31)/2.31 #1.48
 #over the past three years, each person in the H group generate 28 weibo at day time, whereas, each person in the l group generate 
 #34, l group has 16% more weibo than the h group during the daytime. h group generate similar amount of weibo as with l group from 
 #19 to 8 o'clock
@@ -108,12 +132,12 @@ low <- all[all$cesd_sum <= 22, ]
 count_l <- data.frame(table(low$time))
 count_l$Freq <- count_l$Freq/length(unique(low$userid))
 count_h$Var1 <- as.numeric(count_h$Var1)
-h_daytime <- count_h[count_h$Var1 >= 8 & count_h$Var1 <= 17, ]
+h_daytime <- count_h[count_h$Var1 >= 8 & count_h$Var1 <= 18, ]
 #h group, number of posts a day
 sum(h_daytime$Freq) #28
 
 count_l$Var1 <- as.numeric(count_l$Var1)
-l_daytime <- count_l[count_l$Var1 >= 8 & count_l$Var1 <= 17, ]
+l_daytime <- count_l[count_l$Var1 >= 8 & count_l$Var1 <= 18, ]
 #l group, number of posts a day
 sum(l_daytime$Freq) #36
 
